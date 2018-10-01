@@ -17,12 +17,13 @@ SCHEMA = """
         creator     TEXT,
         title       TEXT,
         abstract    TEXT,
+        tags        TEXT,
         date        TEXT,
         citekey     TEXT UNIQUE
     );
 
     CREATE VIRTUAL TABLE items_idx USING fts4(
-        key, creator, title, abstract, date, citekey,
+        key, creator, title, abstract, tags, date, citekey,
         content="items");
     CREATE VIRTUAL TABLE items_idx_terms USING fts4aux(items_idx);
 
@@ -34,25 +35,31 @@ SCHEMA = """
     END;
 
     CREATE TRIGGER items_au AFTER UPDATE ON items BEGIN
-        INSERT INTO items_idx(docid, key, creator, title, abstract, date, citekey)
-            VALUES(new.rowid, new.key, new.creator, new.title, new.abstract, new.date,
+        INSERT INTO items_idx(docid, key, creator, title, abstract, tags, date, citekey)
+            VALUES(new.rowid, new.key, new.creator, new.title, new.abstract, new.tags, new.date,
                    new.citekey);
     END;
     CREATE TRIGGER items_ai AFTER INSERT ON items BEGIN
-        INSERT INTO items_idx(docid, key, creator, title, abstract, date, citekey)
-            VALUES(new.rowid, new.key, new.creator, new.title, new.abstract, new.date,
+        INSERT INTO items_idx(docid, key, creator, title, abstract, tags, date, citekey)
+            VALUES(new.rowid, new.key, new.creator, new.title, new.abstract, new.tags, new.date,
                    new.citekey);
     END;
 """
 SEARCH_QUERY = """
-    SELECT items.key, creator, title, abstract, date, citekey FROM items JOIN (
+    SELECT items.key, creator, title, abstract, tags, date, citekey FROM items JOIN (
         SELECT key FROM items_idx
         WHERE items_idx MATCH :query) AS idx ON idx.key = items.key
         LIMIT :limit;
 """
+SEARCH_QUERY_TAGS = """
+    SELECT items.key, creator, title, abstract, tags, date, citekey FROM items JOIN (
+        SELECT key FROM items_idx
+        WHERE items_idx.tags LIKE :query) AS idx ON idx.key = items.key
+        LIMIT :limit;
+"""
 INSERT_ITEMS_QUERY = """
-    INSERT OR REPLACE INTO items (key, creator, title, abstract, date, citekey)
-        VALUES (:key, :creator, :title, :abstract, :date, :citekey);
+    INSERT OR REPLACE INTO items (key, creator, title, abstract, tags, date, citekey)
+        VALUES (:key, :creator, :title, :abstract, :tags, :date, :citekey);
 """
 INSERT_META_QUERY = """
     INSERT OR REPLACE INTO syncinfo (id, last_sync, version)
@@ -130,4 +137,18 @@ class SearchIndex(object):
         with self._db as cursor:
             query = "'{}'".format(query)
             for itm in cursor.execute(SEARCH_QUERY, (query, limit or -1)):
+                yield Item(*itm)
+
+    def search_tags(self, query, limit=None):
+        """ Search the index for items matching the query.
+
+        :param query:   A sqlite FTS4 query
+        :param limit:   Maximum number of items to return
+        :returns:       Generator that yields matching items.
+        """
+        with self._db as cursor:
+            qtags = query.split(',')
+            query = ' AND '.join(["items_idx.tags LIKE '%{}%'".format(q) for q in qtags])
+            squery = SEARCH_QUERY_TAGS.replace('items_idx.tags LIKE :query', query).replace(':limit', '-1')
+            for itm in cursor.execute(squery):  #, (query, limit or -1)):
                 yield Item(*itm)

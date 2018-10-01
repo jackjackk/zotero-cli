@@ -178,6 +178,15 @@ class ZoteroBackend(object):
         """
         return self._index.search(query, limit=limit)
 
+    def search_tags(self, query, limit=None):
+        """ Search the local index for items.
+
+        :param query:   A sqlite FTS4 query
+        :param limit:   Maximum number of items to return
+        :returns:       Generator that yields matching items.
+        """
+        return self._index.search_tags(query, limit=limit)
+
     def items(self, query=None, limit=None, recursive=False, since=0):
         """ Get a list of all items in the library matching the arguments.
 
@@ -213,6 +222,7 @@ class ZoteroBackend(object):
                        creator=it['meta'].get('creatorSummary'),
                        title=it['data'].get('title', "Untitled"),
                        abstract=it['data'].get('abstractNote'),
+                       tags=','.join([x.get('tag', '') for x in it['data'].get('tags')]),
                        date=it['data'].get('date'),
                        citekey=citekey)
 

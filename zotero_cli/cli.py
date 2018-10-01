@@ -208,6 +208,25 @@ def query(ctx, query, limit):
 
 
 @cli.command()
+@click.argument("query", required=False)
+@click.option("--limit", "-n", type=int, default=100)
+@click.pass_context
+def qtag(ctx, query, limit):
+    """ Search for items with given tags (separated by commas) in the Zotero database. """
+    for item in ctx.obj.search_tags(query, limit):
+        out = click.style(u"[{}] ".format(item.citekey or item.key),
+                          fg='green')
+        if item.creator:
+            out += click.style(item.creator + u': ', fg='cyan')
+        out += click.style(item.title, fg='blue')
+        if item.date:
+            out += click.style(" ({})".format(item.date), fg='yellow')
+        if item.tags:
+            out += click.style(" [{}]".format(item.tags), fg='white')
+        click.echo(out)
+
+
+@cli.command()
 @click.option("--with-note", '-n', required=False, is_flag=True, default=False,
               help="Open the editor for taking notes while reading.")
 @click.argument("item-id", required=True)
